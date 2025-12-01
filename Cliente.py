@@ -19,7 +19,7 @@ BUFFER_SIZE = 4096
 
 # [MODIFICADO] CLAVE COMPARTIDA (Debe ser idéntica en Cliente y Servidor)
 # En producción, esto se manejaría con variables de entorno o intercambio de claves.
-SHARED_KEY = b'uF8wT5Z9_G8oX4K7yQ3V2I1L0H6N4J2M7E4D9C6B4A2S='
+SHARED_KEY = b'HegU0-k-ZWtT79TivN_O-XmIW0RrNUo6abZGPqwsnTs='
 
 # --- 2. VARIABLES GLOBALES DE ESTADO ---
 is_running = True

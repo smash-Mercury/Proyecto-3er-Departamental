@@ -22,7 +22,7 @@ STORAGE_DIR = './storage'
 LOG_FILE = 'servidor_primario.log'
 
 # [MODIFICADO] CLAVE COMPARTIDA (Debe coincidir con la del Cliente)
-SHARED_KEY = b'uF8wT5Z9_G8oX4K7yQ3V2I1L0H6N4J2M7E4D9C6B4A2S='
+SHARED_KEY = b'HegU0-k-ZWtT79TivN_O-XmIW0RrNUo6abZGPqwsnTs='
 
 online_clients = {}
 online_clients_lock = threading.Lock()
@@ -115,11 +115,12 @@ def login_user(username, password):
     return False
 
 
-def save_file_locally(file_data_encrypted, filename, owner, original_hash):
+def save_file_locally(file_data_encrypted, filename, owner, original_hash, is_replica=False):
     """Guarda el archivo (que ya viene encriptado) en disco."""
     try:
         stored_path = os.path.join(
             STORAGE_DIR, f"{original_hash}_{filename}.enc")
+
         with open(stored_path, "wb") as f:
             f.write(file_data_encrypted)
 
@@ -130,9 +131,17 @@ def save_file_locally(file_data_encrypted, filename, owner, original_hash):
         db.commit()
         db.close()
 
-        # Iniciar replicación
-        threading.Thread(target=replicate_to_mirror, args=(
-            "NEW_FILE", (filename, owner, stored_path, original_hash))).start()
+        # [MODIFICADO] Solo iniciamos la replicación si NO es una réplica entrante.
+        # Esto evita el bucle infinito (Server A -> Server B -> Server A...)
+        if not is_replica:
+            threading.Thread(target=replicate_to_mirror, args=(
+                "NEW_FILE", (filename, owner, stored_path, original_hash))).start()
+            logging.info(
+                f"Archivo original guardado. Iniciando replicación para {filename}...")
+        else:
+            logging.info(
+                f"Réplica recibida guardada localmente: {filename} (No se re-envía).")
+
         return True
     except Exception as e:
         logging.error(f"Error guardando archivo: {e}")
@@ -191,8 +200,34 @@ def handle_client(ssock, addr):
                                 {"type": "ERROR", "message": "Credenciales incorrectas"}).encode('utf-8') + b'\n')
 
                     elif command['command'] == 'SEND_MESSAGE':
-                        # (Lógica de mensajes similar al original, omitida por espacio)
-                        pass
+                        if not current_user:
+                            ssock.sendall(json.dumps(
+                                {"type": "ERROR", "message": "Debes estar logueado."}).encode('utf-8') + b'\n')
+                            continue
+
+                        receiver = command["to"]
+                        content = command["content"]
+
+                        # 1. Buscar si el destinatario está conectado
+                        target_socket = None
+                        with online_clients_lock:
+                            target_socket = online_clients.get(receiver)
+
+                        # 2. Enviar el mensaje
+                        if target_socket:
+                            try:
+                                msg_payload = {
+                                    "type": "NEW_MESSAGE", "from": current_user, "content": content}
+                                target_socket.sendall(json.dumps(
+                                    msg_payload).encode('utf-8') + b'\n')
+                                ssock.sendall(json.dumps(
+                                    {"type": "RESPONSE", "message": "Mensaje enviado."}).encode('utf-8') + b'\n')
+                            except Exception as e:
+                                ssock.sendall(json.dumps(
+                                    {"type": "ERROR", "message": "Error de conexión con el destinatario."}).encode('utf-8') + b'\n')
+                        else:
+                            ssock.sendall(json.dumps(
+                                {"type": "RESPONSE", "message": f"Mensaje no enviado. {receiver} no está conectado."}).encode('utf-8') + b'\n')
 
                     elif command['command'] == 'SEND_FILE':
                         if not current_user:
