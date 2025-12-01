@@ -1,0 +1,20 @@
+# Usamos una imagen ligera de Python
+FROM python:3.9-slim
+
+# Directorio de trabajo dentro del contenedor
+WORKDIR /app
+
+# Copiamos los archivos necesarios
+# NOTA: Aquí uso el nombre que veo en tu imagen
+COPY Servidor.py .
+COPY cert.pem .
+COPY key.pem .
+
+# Instalamos la librería de criptografía
+RUN pip install cryptography
+
+# Exponemos el puerto del servidor
+EXPOSE 12345
+
+# Comando para iniciar el servidor
+CMD ["python", "Servidor.py"]
